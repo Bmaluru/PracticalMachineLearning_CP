@@ -1,0 +1,125 @@
+---
+title: "HumanActivityPredictionProject"
+author: "PredMachLearn-012 student"
+date: "Sunday, March 22, 2015"
+output: html_document
+---
+
+## Summary
+
+```{r, echo=FALSE, warning=FALSE}
+require(caret)
+require(ipred)
+require(plyr)
+setwd("C:/Users/Bhanu/Documents/DataSciences from Coursera/CourseProjects/PracticalMachineLearning/Working")
+```
+
+## Getting Ready
+
+### Load the data first
+
+The source files, as inidicated in the project instructions, are downloaded to local working directory.
+
+```{r}
+trainingSet <- read.csv("pml-training.csv", stringsAsFactors = FALSE, na.strings = "NA")
+finalTestSet <- read.csv("pml-testing.csv", stringsAsFactors = FALSE, na.strings = "NA")
+```
+
+### Clean up the data
+
+Preliminary data exploration indicated some clean up required for the data set to be useful.  The following clean up done:
+
+* cvtd_timestamp: modified to just keep the time component in secs to see any day of the time effect
+* new_window: change the data from yes/no to numeric 1/0
+* character variables: change them to numeric as appropriate substituting zero for NA
+
+```{r}
+# Re-usable cleanup function
+cleanUp <- function(dataSet){
+    dataSet$cvtd_timestamp <- difftime(strptime(dataSet$cvtd_timestamp, format = "%d/%m/%Y %H:%M"), 
+                                       as.Date(strptime(dataSet$cvtd_timestamp, format = "%d/%m/%Y %H:%M")), 
+                                       units = "secs")-28800
+    for (i in 1:length(dataSet$new_window)) {
+        dataSet$new_window[i] <- ifelse(is.na(dataSet$new_window[i]), 
+                                        NA, ifelse(dataSet$new_window[i] == "yes", 1, 0))}
+    dataSet$new_window <- as.numeric(dataSet$new_window)
+      
+    for (i in names(dataSet[,-c(1:6, 160)])){
+        dataSet[,i] <- ifelse(typeof(dataSet[,i]) == "character", 
+                              suppressWarnings(as.numeric(dataSet[,i])), 
+                              dataSet[,i])    
+        # Coerce NAs with ZERO
+        dataSet[,i][is.na(dataSet[,i])] <- 0
+       }
+    dataSet[,160] <- as.factor(dataSet[,160])
+        
+    # Return clean data set  
+    dataSet
+}
+
+# cleanup 
+    trainingSet <- cleanUp(trainingSet)
+    finalTestSet <- cleanUp(finalTestSet)
+
+```
+
+## Splitting data from training and testing
+
+Split data to have 75% of the trainingSet for train and the rest 25% for testing.
+
+```{r}
+
+set.seed = 3214
+forTraining <- createDataPartition(trainingSet$classe, p = 0.75, list=FALSE)
+
+MLTrainingSet <- trainingSet[forTraining, -c(1:4)]
+MLTestingSet <- trainingSet[-forTraining, -c(1:4)]
+
+fitControl <- trainControl(method = "cv", number = 5, returnResamp = "all")
+
+```
+
+
+## Training
+
+The training is explored with many methods,  Only two of the methods are shown here as samples.
+
+### Training with TreeBag method
+
+```{r}
+TreeBagMLModel <- train(classe ~ ., method = "treebag", data = MLTrainingSet, trControl = fitControl)
+TBPrediction <- predict(TreeBagMLModel, newdata = MLTestingSet)
+confusionMatrix(TBPrediction, MLTestingSet$classe)
+```
+
+This does not seem to be a great model having only 0.5893 accuracy,  however it has low "No Information Rate" and P-Value.  So, it is worth keeping the model while trying other model.
+
+### Training with 
+
+```{r}
+LogitBoostModel <- train(classe ~ ., method = "LogitBoost", data = MLTrainingSet, trControl = fitControl)
+LBPrediction <- predict(LogitBoostModel, newdata = MLTestingSet)
+confusionMatrix(LBPrediction, MLTestingSet$classe)
+```
+
+This also does not have great accuracy having only 0.3936 and a higher P-Value. The error rate predecting with this model alone will be high.
+
+### Other models
+We can train with other models similarly for higher accuracy and lover P-Value.
+
+## Predicting
+
+We can predict the classification for each of the model to compare and enurate the final prediction based on some rules.
+```{r}
+TreeBagPredict <- predict(TreeBagMLModel, newdata = finalTestSet)
+TreeBagPredict
+```
+
+The above is predictions are shown from TreeBag model.
+
+## Results
+
+The final results based on multiple training models is listed here:
+
+## Answers = (B, A, B, A, A, E, D, B, A, A, B, C, B, A, E, E, A, B, B, B)
+
